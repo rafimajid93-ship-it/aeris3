@@ -11,10 +11,11 @@ public class FileStorageService {
 
     private final Path root;
 
-    public FileStorageService(@Value("${file.upload-dir}") String uploadDir) throws IOException {
-        this.root = Paths.get(uploadDir);
+    public FileStorageService(@Value("${file.upload-dir:uploads}") String uploadDir) throws IOException {
+        this.root = Paths.get(uploadDir).toAbsolutePath().normalize();
         if (!Files.exists(root)) Files.createDirectories(root);
     }
+
 
     public String storeFile(MultipartFile file) {
         try {
