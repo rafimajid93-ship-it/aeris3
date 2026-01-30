@@ -14,7 +14,8 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.http.ResponseEntity;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
-
+import org.springframework.data.domain.Sort;
+import org.springframework.data.domain.PageRequest;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -65,14 +66,36 @@ public class AdminProductController {
     // -----------------------------------------------------
     // ✅ List all products (paged)
     // -----------------------------------------------------
+//    @GetMapping
+//    @Transactional(readOnly = true)
+//    public ResponseEntity<Page<ProductResponse>> getAll(
+//            @RequestParam(defaultValue = "0") int page,
+//            @RequestParam(defaultValue = "50") int size
+//    ) {
+//        var res = productRepo.findAllWithCategory(PageRequest.of(page, size))
+//                .map(this::toListDto);
+//        return ResponseEntity.ok(res);
+//    }
+
     @GetMapping
     @Transactional(readOnly = true)
     public ResponseEntity<Page<ProductResponse>> getAll(
             @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "50") int size
+            @RequestParam(defaultValue = "50") int size,
+            @RequestParam(required = false) Boolean preorder,
+            @RequestParam(required = false, name = "q") String q
     ) {
-        var res = productRepo.findAllWithCategory(PageRequest.of(page, size))
+        page = Math.max(page, 0);
+
+        // ✅ optional safety cap (adjust if you want)
+        int MAX_SIZE = 200;
+        size = Math.max(1, Math.min(size, MAX_SIZE));
+
+        var pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "id"));
+
+        var res = productRepo.findPaged(preorder, q, pageable)
                 .map(this::toListDto);
+
         return ResponseEntity.ok(res);
     }
 
