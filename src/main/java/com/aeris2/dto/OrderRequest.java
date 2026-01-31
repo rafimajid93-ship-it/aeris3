@@ -11,4 +11,6 @@ public class OrderRequest {
     private String phone;
     private PaymentMethod paymentMethod;
     private List<OrderItemRequest> items;
+    private String name;
+    private String facebookId;
 }

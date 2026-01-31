@@ -83,6 +83,8 @@ public class OrderController {
         order.setUser(user);
         order.setShippingAddress(req.getShippingAddress());
         order.setPhoneNumber(req.getPhone());
+        order.setName(req.getName());
+        order.setFacebookId(req.getFacebookId());
         order.setStatus(OrderStatus.PENDING);
 
         BigDecimal total = BigDecimal.ZERO;

@@ -33,7 +33,8 @@ public class Order {
     private OrderStatus status;
 
     private BigDecimal totalAmount;
-
+    private String name;
+    private String facebookId;
     private String shippingAddress;
     private String phoneNumber;
 

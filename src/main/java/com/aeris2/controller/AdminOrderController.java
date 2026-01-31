@@ -79,11 +79,45 @@ public class AdminOrderController {
     }
 
     // ✅ Reuse same DTO mapping logic
+//    private OrderResponse toResponse(Order order) {
+//        OrderResponse res = new OrderResponse();
+//        res.setId(order.getId());
+//        res.setUserName(order.getUser().getName());
+//        res.setUserPhone(order.getPhoneNumber());
+//        res.setTotalAmount(order.getTotalAmount());
+//        res.setShippingAddress(order.getShippingAddress());
+//        res.setStatus(order.getStatus());
+//        res.setCreatedAt(order.getCreatedAt());
+//
+//        if (order.getPayment() != null) {
+//            res.setPaymentMethod(order.getPayment().getMethod());
+//            res.setPaymentStatus(order.getPayment().getStatus());
+//        }
+//
+//        res.setItems(order.getItems().stream().map(i -> {
+//            var dto = new com.aeris2.dto.OrderItemResponse();
+//            dto.setProductId(i.getProduct().getId());
+//            dto.setProductName(i.getProduct().getName());
+//            dto.setPrice(i.getPrice());
+//            dto.setQuantity(i.getQuantity());
+//            dto.setColor(i.getColor());
+//            dto.setSize(i.getSize());
+//            dto.setPreorder(i.getProduct().isPreorder());
+//            return dto;
+//        }).collect(Collectors.toList()));
+//
+//        return res;
+//    }
     private OrderResponse toResponse(Order order) {
         OrderResponse res = new OrderResponse();
         res.setId(order.getId());
         res.setUserName(order.getUser().getName());
         res.setUserPhone(order.getPhoneNumber());
+
+        // ✅ NEW
+        res.setName(order.getName());
+        res.setFacebookId(order.getFacebookId());
+
         res.setTotalAmount(order.getTotalAmount());
         res.setShippingAddress(order.getShippingAddress());
         res.setStatus(order.getStatus());
@@ -108,4 +142,5 @@ public class AdminOrderController {
 
         return res;
     }
+
 }
