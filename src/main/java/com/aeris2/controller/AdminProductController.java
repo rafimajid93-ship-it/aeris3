@@ -459,9 +459,6 @@ public class AdminProductController {
         this.productVariantRepo = productVariantRepo;
     }
 
-    // -----------------------------------------------------
-    // Helpers
-    // -----------------------------------------------------
     private String normalizeValue(String raw) {
         if (raw == null) return "Default";
         String v = raw.trim();
@@ -497,7 +494,7 @@ public class AdminProductController {
             }
         }
 
-        if ((out.isEmpty()) && fallbackSingleImage != null && !fallbackSingleImage.trim().isEmpty()) {
+        if (out.isEmpty() && fallbackSingleImage != null && !fallbackSingleImage.trim().isEmpty()) {
             out.add(fallbackSingleImage.trim());
         }
 
@@ -508,9 +505,6 @@ public class AdminProductController {
         return (imageUrls != null && !imageUrls.isEmpty()) ? imageUrls.get(0) : null;
     }
 
-    // -----------------------------------------------------
-    // ✅ List all products (paged)
-    // -----------------------------------------------------
     @GetMapping
     @Transactional(readOnly = true)
     public ResponseEntity<Page<ProductResponse>> getAll(
@@ -531,9 +525,6 @@ public class AdminProductController {
         return ResponseEntity.ok(res);
     }
 
-    // -----------------------------------------------------
-    // ✅ List normal (non-preorder) products
-    // -----------------------------------------------------
     @GetMapping("/normal")
     @Transactional(readOnly = true)
     public ResponseEntity<List<ProductResponse>> getNormalProducts() {
@@ -545,9 +536,6 @@ public class AdminProductController {
         return ResponseEntity.ok(list);
     }
 
-    // -----------------------------------------------------
-    // ✅ List preorder products
-    // -----------------------------------------------------
     @GetMapping("/preorders")
     @Transactional(readOnly = true)
     public ResponseEntity<List<ProductResponse>> getPreorderProducts() {
@@ -559,55 +547,63 @@ public class AdminProductController {
         return ResponseEntity.ok(list);
     }
 
-    // -----------------------------------------------------
-    // ✅ Create product (normal + preorder)
-    // -----------------------------------------------------
     @PostMapping
     @Transactional
-    public ResponseEntity<Product> create(@RequestBody Product p) {
+    public ResponseEntity<Product> create(@RequestBody ProductRequest req) {
+        Product p = new Product();
 
-        if (p.getCategory() != null && p.getCategory().getId() != null) {
-            categoryRepo.findById(p.getCategory().getId()).ifPresent(p::setCategory);
-        }
+        p.setName(req.getName());
+        p.setDescription(req.getDescription());
+        p.setPrice(req.getPrice());
+        p.setPreorder(Boolean.TRUE.equals(req.getPreorder()));
+        p.setReleaseDate(Boolean.TRUE.equals(req.getPreorder()) ? req.getReleaseDate() : null);
 
-        p.setColors(normalizeSet(p.getColors()));
-        p.setSizes(normalizeSet(p.getSizes()));
+        p.setColors(normalizeSet(req.getColors()));
+        p.setSizes(normalizeSet(req.getSizes()));
 
-        List<String> normalizedImages = normalizeImageUrls(p.getImageUrls(), p.getImageUrl());
+        List<String> normalizedImages = normalizeImageUrls(req.getImageUrls(), req.getImageUrl());
         p.setImageUrls(normalizedImages);
         p.setImageUrl(firstImageOrNull(normalizedImages));
+
+        if (req.getCategoryId() != null) {
+            categoryRepo.findById(req.getCategoryId()).ifPresent(p::setCategory);
+        }
 
         boolean isPreorder = p.isPreorder();
 
         if (isPreorder) {
             p.setStock(0);
+        } else {
+            p.setStock(req.getStock() != null ? Math.max(0, req.getStock()) : 0);
         }
 
-        List<ProductVariant> requestVariants =
-                p.getVariants() != null ? new ArrayList<>(p.getVariants()) : new ArrayList<>();
+        List<ProductVariantRequest> requestVariants =
+                req.getVariants() != null ? new ArrayList<>(req.getVariants()) : new ArrayList<>();
 
         p.setVariants(new ArrayList<>());
 
         Product saved = productRepo.save(p);
 
         if (!isPreorder && !requestVariants.isEmpty()) {
+            List<ProductVariant> variantsToSave = new ArrayList<>();
 
-            for (ProductVariant v : requestVariants) {
-                String color = normalizeValue(v.getColor());
-                String size = normalizeValue(v.getSize());
-                v.setColor(color);
-                v.setSize(size);
+            for (ProductVariantRequest vReq : requestVariants) {
+                ProductVariant v = new ProductVariant();
                 v.setProduct(saved);
+                v.setColor(normalizeValue(vReq.getColor()));
+                v.setSize(normalizeValue(vReq.getSize()));
+                v.setStock(Math.max(0, vReq.getStock()));
+                variantsToSave.add(v);
             }
 
-            productVariantRepo.saveAll(requestVariants);
-            saved.setVariants(requestVariants);
+            productVariantRepo.saveAll(variantsToSave);
+            saved.setVariants(variantsToSave);
 
-            int totalStock = requestVariants.stream()
+            int totalStock = variantsToSave.stream()
                     .mapToInt(ProductVariant::getStock)
                     .sum();
             saved.setStock(totalStock);
-            productRepo.save(saved);
+            saved = productRepo.save(saved);
         }
 
         if (isPreorder) {
@@ -638,9 +634,6 @@ public class AdminProductController {
         return ResponseEntity.ok(saved);
     }
 
-    // -----------------------------------------------------
-    // ✅ Update product
-    // -----------------------------------------------------
     @PutMapping("/{id}")
     @Transactional
     public ResponseEntity<Product> update(@PathVariable Long id, @RequestBody ProductRequest p) {
@@ -650,7 +643,6 @@ public class AdminProductController {
             if (p.getDescription() != null) existing.setDescription(p.getDescription());
             if (p.getPrice() != null) existing.setPrice(p.getPrice());
 
-            // -------- images --------
             if (p.getImageUrls() != null) {
                 List<String> normalizedImages = normalizeImageUrls(p.getImageUrls(), p.getImageUrl());
                 existing.setImageUrls(normalizedImages);
@@ -678,7 +670,6 @@ public class AdminProductController {
             }
 
             if (p.getPreorder() != null) {
-
                 if (Boolean.TRUE.equals(p.getPreorder())) {
                     existing.setPreorder(true);
                     existing.setReleaseDate(p.getReleaseDate());
@@ -721,7 +712,6 @@ public class AdminProductController {
                     int totalStock = 0;
 
                     if (p.getVariants() != null && !p.getVariants().isEmpty()) {
-
                         Map<String, Integer> aggregated = new LinkedHashMap<>();
 
                         for (ProductVariantRequest vReq : p.getVariants()) {
@@ -765,9 +755,6 @@ public class AdminProductController {
         }).orElse(ResponseEntity.notFound().build());
     }
 
-    // -----------------------------------------------------
-    // ✅ Delete product
-    // -----------------------------------------------------
     @DeleteMapping("/{id}")
     @Transactional
     public ResponseEntity<Void> delete(@PathVariable Long id) {
@@ -777,9 +764,6 @@ public class AdminProductController {
         return ResponseEntity.noContent().build();
     }
 
-    // -----------------------------------------------------
-    // ✅ Get single product
-    // -----------------------------------------------------
     @GetMapping("/{id}")
     @Transactional(readOnly = true)
     public ResponseEntity<ProductResponse> getByIdAdmin(@PathVariable Long id) {
@@ -788,9 +772,6 @@ public class AdminProductController {
                 .orElse(ResponseEntity.notFound().build());
     }
 
-    // -----------------------------------------------------
-    // 🧩 DTO mapper
-    // -----------------------------------------------------
     private ProductResponse toListDto(Product p) {
         ProductResponse dto = new ProductResponse();
         dto.setId(p.getId());
@@ -801,11 +782,7 @@ public class AdminProductController {
 
         List<String> imageUrls = p.getImageUrls() == null ? List.of() : new ArrayList<>(p.getImageUrls());
         dto.setImageUrls(imageUrls);
-        dto.setImageUrl(
-                (imageUrls != null && !imageUrls.isEmpty())
-                        ? imageUrls.get(0)
-                        : p.getImageUrl()
-        );
+        dto.setImageUrl(!imageUrls.isEmpty() ? imageUrls.get(0) : p.getImageUrl());
 
         dto.setPreorder(p.isPreorder());
         dto.setReleaseDate(p.getReleaseDate());
