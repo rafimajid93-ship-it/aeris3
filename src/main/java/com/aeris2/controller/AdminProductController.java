@@ -423,13 +423,11 @@
 //}
 package com.aeris2.controller;
 
-import com.aeris2.dto.ProductImageResponse;
 import com.aeris2.dto.ProductRequest;
 import com.aeris2.dto.ProductResponse;
 import com.aeris2.dto.ProductVariantRequest;
 import com.aeris2.dto.ProductVariantResponse;
 import com.aeris2.model.Product;
-import com.aeris2.model.ProductImage;
 import com.aeris2.model.ProductVariant;
 import com.aeris2.repository.CategoryRepository;
 import com.aeris2.repository.ProductRepository;
@@ -461,6 +459,9 @@ public class AdminProductController {
         this.productVariantRepo = productVariantRepo;
     }
 
+    // -----------------------------------------------------
+    // Helpers
+    // -----------------------------------------------------
     private String normalizeValue(String raw) {
         if (raw == null) return "Default";
         String v = raw.trim();
@@ -485,39 +486,31 @@ public class AdminProductController {
         return out;
     }
 
-    private List<String> normalizeImageUrls(List<String> input, String fallbackSingleUrl) {
-        List<String> out = new ArrayList<>();
+    private List<String> normalizeImageUrls(List<String> input, String fallbackSingleImage) {
+        LinkedHashSet<String> out = new LinkedHashSet<>();
 
         if (input != null) {
             for (String url : input) {
                 if (url == null) continue;
-                String trimmed = url.trim();
-                if (!trimmed.isEmpty()) out.add(trimmed);
+                String cleaned = url.trim();
+                if (!cleaned.isEmpty()) out.add(cleaned);
             }
         }
 
-        if (out.isEmpty() && fallbackSingleUrl != null && !fallbackSingleUrl.trim().isEmpty()) {
-            out.add(fallbackSingleUrl.trim());
+        if ((out.isEmpty()) && fallbackSingleImage != null && !fallbackSingleImage.trim().isEmpty()) {
+            out.add(fallbackSingleImage.trim());
         }
 
-        return out;
+        return new ArrayList<>(out);
     }
 
-    private void rebuildImages(Product product, List<String> urls) {
-        product.getImages().clear();
-
-        int order = 0;
-        for (String url : urls) {
-            ProductImage image = new ProductImage();
-            image.setProduct(product);
-            image.setImageUrl(url);
-            image.setSortOrder(order++);
-            product.getImages().add(image);
-        }
-
-        product.setImageUrl(urls.isEmpty() ? null : urls.get(0));
+    private String firstImageOrNull(List<String> imageUrls) {
+        return (imageUrls != null && !imageUrls.isEmpty()) ? imageUrls.get(0) : null;
     }
 
+    // -----------------------------------------------------
+    // ✅ List all products (paged)
+    // -----------------------------------------------------
     @GetMapping
     @Transactional(readOnly = true)
     public ResponseEntity<Page<ProductResponse>> getAll(
@@ -538,6 +531,9 @@ public class AdminProductController {
         return ResponseEntity.ok(res);
     }
 
+    // -----------------------------------------------------
+    // ✅ List normal (non-preorder) products
+    // -----------------------------------------------------
     @GetMapping("/normal")
     @Transactional(readOnly = true)
     public ResponseEntity<List<ProductResponse>> getNormalProducts() {
@@ -549,6 +545,9 @@ public class AdminProductController {
         return ResponseEntity.ok(list);
     }
 
+    // -----------------------------------------------------
+    // ✅ List preorder products
+    // -----------------------------------------------------
     @GetMapping("/preorders")
     @Transactional(readOnly = true)
     public ResponseEntity<List<ProductResponse>> getPreorderProducts() {
@@ -560,9 +559,12 @@ public class AdminProductController {
         return ResponseEntity.ok(list);
     }
 
+    // -----------------------------------------------------
+    // ✅ Create product (normal + preorder)
+    // -----------------------------------------------------
     @PostMapping
     @Transactional
-    public ResponseEntity<ProductResponse> create(@RequestBody Product p) {
+    public ResponseEntity<Product> create(@RequestBody Product p) {
 
         if (p.getCategory() != null && p.getCategory().getId() != null) {
             categoryRepo.findById(p.getCategory().getId()).ifPresent(p::setCategory);
@@ -570,6 +572,10 @@ public class AdminProductController {
 
         p.setColors(normalizeSet(p.getColors()));
         p.setSizes(normalizeSet(p.getSizes()));
+
+        List<String> normalizedImages = normalizeImageUrls(p.getImageUrls(), p.getImageUrl());
+        p.setImageUrls(normalizedImages);
+        p.setImageUrl(firstImageOrNull(normalizedImages));
 
         boolean isPreorder = p.isPreorder();
 
@@ -582,34 +588,10 @@ public class AdminProductController {
 
         p.setVariants(new ArrayList<>());
 
-        List<ProductImage> requestImages =
-                p.getImages() != null ? new ArrayList<>(p.getImages()) : new ArrayList<>();
-        p.setImages(new ArrayList<>());
-
         Product saved = productRepo.save(p);
 
-        if (!requestImages.isEmpty()) {
-            int order = 0;
-            for (ProductImage image : requestImages) {
-                if (image.getImageUrl() == null || image.getImageUrl().trim().isEmpty()) continue;
-                image.setId(null);
-                image.setProduct(saved);
-                image.setImageUrl(image.getImageUrl().trim());
-                image.setSortOrder(order++);
-                saved.getImages().add(image);
-            }
-            if (!saved.getImages().isEmpty()) {
-                saved.setImageUrl(saved.getImages().get(0).getImageUrl());
-            }
-        } else if (saved.getImageUrl() != null && !saved.getImageUrl().trim().isEmpty()) {
-            ProductImage cover = new ProductImage();
-            cover.setProduct(saved);
-            cover.setImageUrl(saved.getImageUrl().trim());
-            cover.setSortOrder(0);
-            saved.getImages().add(cover);
-        }
-
         if (!isPreorder && !requestVariants.isEmpty()) {
+
             for (ProductVariant v : requestVariants) {
                 String color = normalizeValue(v.getColor());
                 String size = normalizeValue(v.getSize());
@@ -625,6 +607,7 @@ public class AdminProductController {
                     .mapToInt(ProductVariant::getStock)
                     .sum();
             saved.setStock(totalStock);
+            productRepo.save(saved);
         }
 
         if (isPreorder) {
@@ -652,25 +635,30 @@ public class AdminProductController {
             }
         }
 
-        Product finalSaved = productRepo.save(saved);
-        return ResponseEntity.ok(toListDto(finalSaved));
+        return ResponseEntity.ok(saved);
     }
 
+    // -----------------------------------------------------
+    // ✅ Update product
+    // -----------------------------------------------------
     @PutMapping("/{id}")
     @Transactional
-    public ResponseEntity<ProductResponse> update(@PathVariable Long id, @RequestBody ProductRequest p) {
-        return productRepo.findByIdWithCategory(id).map(existing -> {
+    public ResponseEntity<Product> update(@PathVariable Long id, @RequestBody ProductRequest p) {
+        return productRepo.findById(id).map(existing -> {
 
             if (p.getName() != null) existing.setName(p.getName());
             if (p.getDescription() != null) existing.setDescription(p.getDescription());
             if (p.getPrice() != null) existing.setPrice(p.getPrice());
 
-            List<String> normalizedImageUrls = normalizeImageUrls(p.getImageUrls(), p.getImageUrl());
-            if (!normalizedImageUrls.isEmpty()) {
-                rebuildImages(existing, normalizedImageUrls);
-            } else if (p.getImageUrl() != null && p.getImageUrl().trim().isEmpty()) {
-                existing.getImages().clear();
-                existing.setImageUrl(null);
+            // -------- images --------
+            if (p.getImageUrls() != null) {
+                List<String> normalizedImages = normalizeImageUrls(p.getImageUrls(), p.getImageUrl());
+                existing.setImageUrls(normalizedImages);
+                existing.setImageUrl(firstImageOrNull(normalizedImages));
+            } else if (p.getImageUrl() != null) {
+                List<String> normalizedImages = normalizeImageUrls(existing.getImageUrls(), p.getImageUrl());
+                existing.setImageUrls(normalizedImages);
+                existing.setImageUrl(firstImageOrNull(normalizedImages));
             }
 
             if (p.getColors() != null) {
@@ -690,13 +678,13 @@ public class AdminProductController {
             }
 
             if (p.getPreorder() != null) {
+
                 if (Boolean.TRUE.equals(p.getPreorder())) {
                     existing.setPreorder(true);
                     existing.setReleaseDate(p.getReleaseDate());
 
                     Set<String> colors = existing.getColors();
                     Set<String> sizes = existing.getSizes();
-
                     boolean hasNonDefault =
                             colors.stream().anyMatch(c -> !c.equalsIgnoreCase("Default")) ||
                                     sizes.stream().anyMatch(s -> !s.equalsIgnoreCase("Default"));
@@ -733,6 +721,7 @@ public class AdminProductController {
                     int totalStock = 0;
 
                     if (p.getVariants() != null && !p.getVariants().isEmpty()) {
+
                         Map<String, Integer> aggregated = new LinkedHashMap<>();
 
                         for (ProductVariantRequest vReq : p.getVariants()) {
@@ -771,11 +760,14 @@ public class AdminProductController {
             }
 
             Product saved = productRepo.save(existing);
-            return ResponseEntity.ok(toListDto(saved));
+            return ResponseEntity.ok(saved);
 
         }).orElse(ResponseEntity.notFound().build());
     }
 
+    // -----------------------------------------------------
+    // ✅ Delete product
+    // -----------------------------------------------------
     @DeleteMapping("/{id}")
     @Transactional
     public ResponseEntity<Void> delete(@PathVariable Long id) {
@@ -785,6 +777,9 @@ public class AdminProductController {
         return ResponseEntity.noContent().build();
     }
 
+    // -----------------------------------------------------
+    // ✅ Get single product
+    // -----------------------------------------------------
     @GetMapping("/{id}")
     @Transactional(readOnly = true)
     public ResponseEntity<ProductResponse> getByIdAdmin(@PathVariable Long id) {
@@ -793,6 +788,9 @@ public class AdminProductController {
                 .orElse(ResponseEntity.notFound().build());
     }
 
+    // -----------------------------------------------------
+    // 🧩 DTO mapper
+    // -----------------------------------------------------
     private ProductResponse toListDto(Product p) {
         ProductResponse dto = new ProductResponse();
         dto.setId(p.getId());
@@ -800,7 +798,15 @@ public class AdminProductController {
         dto.setDescription(p.getDescription());
         dto.setPrice(p.getPrice());
         dto.setStock(p.getStock());
-        dto.setImageUrl(resolveCoverImage(p));
+
+        List<String> imageUrls = p.getImageUrls() == null ? List.of() : new ArrayList<>(p.getImageUrls());
+        dto.setImageUrls(imageUrls);
+        dto.setImageUrl(
+                (imageUrls != null && !imageUrls.isEmpty())
+                        ? imageUrls.get(0)
+                        : p.getImageUrl()
+        );
+
         dto.setPreorder(p.isPreorder());
         dto.setReleaseDate(p.getReleaseDate());
         dto.setCreatedAt(p.getCreatedAt());
@@ -830,19 +836,6 @@ public class AdminProductController {
             dto.setVariants(List.of());
         }
 
-        List<ProductImageResponse> images = p.getImages() == null
-                ? List.of()
-                : p.getImages().stream().map(img -> {
-            ProductImageResponse ir = new ProductImageResponse();
-            ir.setId(img.getId());
-            ir.setImageUrl(img.getImageUrl());
-            ir.setSortOrder(img.getSortOrder());
-            return ir;
-        }).toList();
-
-        dto.setImages(images);
-        dto.setImageUrls(images.stream().map(ProductImageResponse::getImageUrl).toList());
-
         if (p.getCategory() != null) {
             dto.setCategoryId(p.getCategory().getId());
             dto.setCategoryName(p.getCategory().getName());
@@ -851,12 +844,5 @@ public class AdminProductController {
         }
 
         return dto;
-    }
-
-    private String resolveCoverImage(Product p) {
-        if (p.getImages() != null && !p.getImages().isEmpty()) {
-            return p.getImages().get(0).getImageUrl();
-        }
-        return p.getImageUrl();
     }
 }

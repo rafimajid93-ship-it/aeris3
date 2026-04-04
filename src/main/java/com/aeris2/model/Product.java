@@ -111,10 +111,18 @@ public class Product {
     private BigDecimal price;
 
     /**
-     * Legacy / cover image.
-     * Keep this for backward compatibility.
+     * Backward compatibility / cover image
      */
     private String imageUrl;
+
+    /**
+     * Multiple product images
+     */
+    @ElementCollection(fetch = FetchType.EAGER)
+    @CollectionTable(name = "product_images", joinColumns = @JoinColumn(name = "product_id"))
+    @Column(name = "image_url", length = 2000)
+    @OrderColumn(name = "sort_order")
+    private List<String> imageUrls = new ArrayList<>();
 
     /** Aggregated stock from variants (for non-preorder products). */
     private int stock;
@@ -151,14 +159,4 @@ public class Product {
     )
     @JsonIgnoreProperties("product")
     private List<ProductVariant> variants = new ArrayList<>();
-
-    @OneToMany(
-            mappedBy = "product",
-            cascade = CascadeType.ALL,
-            orphanRemoval = true,
-            fetch = FetchType.LAZY
-    )
-    @OrderBy("sortOrder ASC, id ASC")
-    @JsonIgnoreProperties("product")
-    private List<ProductImage> images = new ArrayList<>();
 }

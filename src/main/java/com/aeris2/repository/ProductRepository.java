@@ -62,6 +62,8 @@
 //    @Query("SELECT p FROM Product p WHERE p.id = :id")
 //    Optional<Product> findByIdWithCategory(@Param("id") Long id);
 //}
+
+
 package com.aeris2.repository;
 
 import com.aeris2.model.Product;
@@ -98,7 +100,7 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
     @Query("SELECT p FROM Product p")
     Page<Product> findAllWithCategory(Pageable pageable);
 
-    @EntityGraph(attributePaths = {"category", "variants", "colors", "sizes", "images"})
+    @EntityGraph(attributePaths = {"category", "variants", "colors", "sizes", "imageUrls"})
     @Query("SELECT p FROM Product p WHERE p.id = :id")
     Optional<Product> findByIdWithCategory(@Param("id") Long id);
 }

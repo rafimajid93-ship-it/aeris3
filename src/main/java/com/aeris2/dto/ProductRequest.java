@@ -51,6 +51,7 @@
 //    private List<ProductVariantRequest> variants;
 //}
 
+
 package com.aeris2.dto;
 
 import jakarta.validation.constraints.*;
@@ -78,10 +79,15 @@ public class ProductRequest {
     /** Global stock (not used when variants exist and preorder=false). */
     private Integer stock;
 
-    /** Legacy single cover image */
+    /**
+     * Backward compatibility:
+     * first/cover image
+     */
     private String imageUrl;
 
-    /** New multiple image URLs */
+    /**
+     * New: multiple images for each product
+     */
     private List<String> imageUrls;
 
     @NotNull(message = "Category is required")
@@ -93,8 +99,17 @@ public class ProductRequest {
     /** Optional release date */
     private LocalDate releaseDate;
 
+    /**
+     * Colors/sizes metadata (normalized to lowercase in controller)
+     * Using LinkedHashSet preserves order
+     */
     private Set<String> colors = new LinkedHashSet<>();
     private Set<String> sizes = new LinkedHashSet<>();
 
+    /**
+     * Variant grid input (color + size + stock)
+     * Only used when preorder=false
+     * Preorder variants default to stock=0
+     */
     private List<ProductVariantRequest> variants;
 }

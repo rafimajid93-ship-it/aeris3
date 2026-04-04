@@ -381,9 +381,9 @@
 ////}
 
 
+
 package com.aeris2.controller;
 
-import com.aeris2.dto.ProductImageResponse;
 import com.aeris2.dto.ProductOptionsResponse;
 import com.aeris2.dto.ProductResponse;
 import com.aeris2.dto.ProductVariantResponse;
@@ -450,9 +450,16 @@ public class ProductController {
         r.setDescription(p.getDescription());
         r.setPrice(p.getPrice());
         r.setStock(p.getStock());
-        r.setImageUrl(resolveCoverImage(p));
-        r.setPreorder(p.isPreorder());
 
+        List<String> imageUrls = p.getImageUrls() == null ? List.of() : new ArrayList<>(p.getImageUrls());
+        r.setImageUrls(imageUrls);
+        r.setImageUrl(
+                (imageUrls != null && !imageUrls.isEmpty())
+                        ? imageUrls.get(0)
+                        : p.getImageUrl()
+        );
+
+        r.setPreorder(p.isPreorder());
         r.setReleaseDate(p.getReleaseDate());
         r.setCreatedAt(p.getCreatedAt());
         r.setUpdatedAt(p.getUpdatedAt());
@@ -473,29 +480,9 @@ public class ProductController {
                     vr.setStock(v.getStock());
                     return vr;
                 }).toList();
+
         r.setVariants(variants);
-
-        List<ProductImageResponse> images = p.getImages() == null
-                ? List.of()
-                : p.getImages().stream().map(img -> {
-            ProductImageResponse ir = new ProductImageResponse();
-            ir.setId(img.getId());
-            ir.setImageUrl(img.getImageUrl());
-            ir.setSortOrder(img.getSortOrder());
-            return ir;
-        }).toList();
-
-        r.setImages(images);
-        r.setImageUrls(images.stream().map(ProductImageResponse::getImageUrl).toList());
-
         r.setReviewCount(0);
         return r;
-    }
-
-    private String resolveCoverImage(Product p) {
-        if (p.getImages() != null && !p.getImages().isEmpty()) {
-            return p.getImages().get(0).getImageUrl();
-        }
-        return p.getImageUrl();
     }
 }

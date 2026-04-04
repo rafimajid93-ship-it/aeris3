@@ -59,7 +59,16 @@ public class ProductResponse {
     private BigDecimal price;
     private int stock;
 
-    private String imageUrl; // cover image for backward compatibility
+    /**
+     * Backward compatibility:
+     * first/cover image
+     */
+    private String imageUrl;
+
+    /**
+     * New: multiple images for frontend gallery / slider
+     */
+    private List<String> imageUrls;
 
     private boolean preorder;
     private LocalDate releaseDate;
@@ -74,9 +83,6 @@ public class ProductResponse {
     private Set<String> sizes;
 
     private List<ProductVariantResponse> variants;
-
-    private List<ProductImageResponse> images;
-    private List<String> imageUrls;
 
     private int reviewCount;
 }
