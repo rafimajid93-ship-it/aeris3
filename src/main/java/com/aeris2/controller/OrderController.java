@@ -1,3 +1,4 @@
+//
 //package com.aeris2.controller;
 //
 //import com.aeris2.dto.OrderItemRequest;
@@ -43,9 +44,6 @@
 //        this.variantRepo = variantRepo;
 //    }
 //
-//    // -----------------------------------------------------
-//    // Helpers
-//    // -----------------------------------------------------
 //    private String normalizeValue(String raw) {
 //        if (raw == null) return "Default";
 //        String v = raw.trim();
@@ -69,9 +67,6 @@
 //        return val == null ? 0 : val;
 //    }
 //
-//    // -----------------------------------------------------
-//    // ✅ Place order and update stock / preorder demand
-//    // -----------------------------------------------------
 //    @Transactional
 //    @PostMapping
 //    public ResponseEntity<OrderResponse> placeOrder(@RequestBody OrderRequest req,
@@ -104,11 +99,7 @@
 //            boolean hasVariants = hasVariants(variants);
 //
 //            if (product.isPreorder()) {
-//                // -------------------------------
-//                // PREORDER  ➜ INCREASE COUNTS
-//                // -------------------------------
 //                if (!hasVariants) {
-//                    // simple preorder without any variant rows
 //                    int current = safeInt(product.getStock());
 //                    product.setStock(current + i.getQuantity());
 //                    productRepo.save(product);
@@ -116,9 +107,8 @@
 //                    item.setColor(null);
 //                    item.setSize(null);
 //                } else {
-//                    // preorder WITH variants – increase variant stock
 //                    String color = normalizeValue(i.getColor());
-//                    String size  = normalizeValue(i.getSize());
+//                    String size = normalizeValue(i.getSize());
 //
 //                    ProductVariant variant = variantRepo
 //                            .findByProductIdAndColorIgnoreCaseAndSizeIgnoreCase(
@@ -144,11 +134,7 @@
 //                }
 //
 //            } else {
-//                // -------------------------------
-//                // NORMAL PRODUCT  ➜ DECREASE STOCK
-//                // -------------------------------
 //                if (!hasVariants) {
-//                    // product-level stock only (no variant rows)
 //                    int current = safeInt(product.getStock());
 //                    if (current < i.getQuantity()) {
 //                        throw new RuntimeException("Not enough stock for product: " + product.getName());
@@ -159,9 +145,8 @@
 //                    item.setColor(null);
 //                    item.setSize(null);
 //                } else {
-//                    // variant-based stock – ALSO used for Default/Default variant
 //                    String color = normalizeValue(i.getColor());
-//                    String size  = normalizeValue(i.getSize());
+//                    String size = normalizeValue(i.getSize());
 //
 //                    ProductVariant variant = variantRepo
 //                            .findByProductIdAndColorIgnoreCaseAndSizeIgnoreCase(
@@ -200,7 +185,6 @@
 //        order.setTotalAmount(total);
 //        orderRepo.save(order);
 //
-//        // Payment record
 //        Payment payment = Payment.builder()
 //                .order(order)
 //                .amount(total)
@@ -218,9 +202,6 @@
 //        return ResponseEntity.ok(toResponse(order));
 //    }
 //
-//    // -----------------------------------------------------
-//    // Cancel order (reverse stock / preorder demand)
-//    // -----------------------------------------------------
 //    @PatchMapping("/{id}/cancel")
 //    @Transactional
 //    public ResponseEntity<OrderResponse> cancelOrder(@PathVariable Long id) {
@@ -239,14 +220,13 @@
 //            boolean hasVariants = hasVariants(variants);
 //
 //            if (product.isPreorder()) {
-//                // --------------------- PREORDER: decrease demand ---------------------
 //                if (!hasVariants) {
 //                    int current = safeInt(product.getStock());
 //                    product.setStock(Math.max(0, current - qty));
 //                    productRepo.save(product);
 //                } else {
 //                    String color = normalizeValue(item.getColor());
-//                    String size  = normalizeValue(item.getSize());
+//                    String size = normalizeValue(item.getSize());
 //
 //                    ProductVariant variant = variantRepo
 //                            .findByProductIdAndColorIgnoreCaseAndSizeIgnoreCase(
@@ -268,14 +248,13 @@
 //                }
 //
 //            } else {
-//                // --------------------- NORMAL PRODUCT: restore stock -----------------
 //                if (!hasVariants) {
 //                    int current = safeInt(product.getStock());
 //                    product.setStock(current + qty);
 //                    productRepo.save(product);
 //                } else {
 //                    String color = normalizeValue(item.getColor());
-//                    String size  = normalizeValue(item.getSize());
+//                    String size = normalizeValue(item.getSize());
 //
 //                    ProductVariant variant = variantRepo
 //                            .findByProductIdAndColorIgnoreCaseAndSizeIgnoreCase(
@@ -294,7 +273,6 @@
 //                        product.setStock(totalStock);
 //                        productRepo.save(product);
 //                    } else {
-//                        // safety fallback if variant not found
 //                        int current = safeInt(product.getStock());
 //                        product.setStock(current + qty);
 //                        productRepo.save(product);
@@ -308,9 +286,6 @@
 //        return ResponseEntity.ok(toResponse(order));
 //    }
 //
-//    // -----------------------------------------------------
-//    // Other endpoints (unchanged)
-//    // -----------------------------------------------------
 //    @GetMapping("/{id}")
 //    public ResponseEntity<OrderResponse> getOrder(@PathVariable Long id) {
 //        return orderRepo.findById(id)
@@ -328,14 +303,13 @@
 //        return ResponseEntity.ok(responses);
 //    }
 //
-//    // -----------------------------------------------------
-//    // Mapping
-//    // -----------------------------------------------------
 //    private OrderResponse toResponse(Order order) {
 //        OrderResponse res = new OrderResponse();
 //        res.setId(order.getId());
 //        res.setUserName(order.getUser().getName());
 //        res.setUserPhone(order.getPhoneNumber());
+//        res.setName(order.getName());
+//        res.setFacebookId(order.getFacebookId());
 //        res.setTotalAmount(order.getTotalAmount());
 //        res.setShippingAddress(order.getShippingAddress());
 //        res.setStatus(order.getStatus());
@@ -348,12 +322,14 @@
 //
 //        List<OrderItemResponse> itemResponses = order.getItems().stream().map(i -> {
 //            OrderItemResponse ir = new OrderItemResponse();
+//            ir.setId(i.getId());
 //            ir.setProductId(i.getProduct().getId());
 //            ir.setProductName(i.getProduct().getName());
 //            ir.setQuantity(i.getQuantity());
 //            ir.setPrice(i.getPrice());
 //            ir.setColor(i.getColor());
 //            ir.setSize(i.getSize());
+//            ir.setPreorder(i.getProduct().isPreorder());
 //            return ir;
 //        }).collect(Collectors.toList());
 //
@@ -439,6 +415,7 @@ public class OrderController {
         User user = userRepo.findByEmail(email).orElseThrow();
 
         Order order = new Order();
+        order.setInvoiceToken(UUID.randomUUID().toString());
         order.setUser(user);
         order.setShippingAddress(req.getShippingAddress());
         order.setPhoneNumber(req.getPhone());
@@ -650,6 +627,14 @@ public class OrderController {
         return ResponseEntity.ok(toResponse(order));
     }
 
+    @GetMapping("/invoice/{token}")
+    @Transactional(readOnly = true)
+    public ResponseEntity<OrderResponse> getInvoiceByToken(@PathVariable String token) {
+        return orderRepo.findByInvoiceToken(token)
+                .map(order -> ResponseEntity.ok(toResponse(order)))
+                .orElse(ResponseEntity.notFound().build());
+    }
+
     @GetMapping("/{id}")
     public ResponseEntity<OrderResponse> getOrder(@PathVariable Long id) {
         return orderRepo.findById(id)
@@ -678,6 +663,8 @@ public class OrderController {
         res.setShippingAddress(order.getShippingAddress());
         res.setStatus(order.getStatus());
         res.setCreatedAt(order.getCreatedAt());
+        res.setInvoiceToken(order.getInvoiceToken());
+        res.setInvoiceUrl("/invoice/" + order.getInvoiceToken());
 
         if (order.getPayment() != null) {
             res.setPaymentMethod(order.getPayment().getMethod());

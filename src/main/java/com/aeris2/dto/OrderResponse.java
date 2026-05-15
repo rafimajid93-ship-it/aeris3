@@ -1,3 +1,4 @@
+//
 //package com.aeris2.dto;
 //
 //import com.aeris2.model.enums.PaymentMethod;
@@ -17,6 +18,10 @@
 //    private String userName;
 //    private String userPhone;
 //
+//    // ✅ NEW
+//    private String name;
+//    private String facebookId;
+//
 //    private BigDecimal totalAmount;
 //    private String shippingAddress;
 //
@@ -28,6 +33,8 @@
 //
 //    private List<OrderItemResponse> items;
 //}
+
+
 package com.aeris2.dto;
 
 import com.aeris2.model.enums.PaymentMethod;
@@ -47,7 +54,6 @@ public class OrderResponse {
     private String userName;
     private String userPhone;
 
-    // ✅ NEW
     private String name;
     private String facebookId;
 
@@ -59,6 +65,9 @@ public class OrderResponse {
 
     private PaymentMethod paymentMethod;
     private PaymentStatus paymentStatus;
+
+    private String invoiceToken;
+    private String invoiceUrl;
 
     private List<OrderItemResponse> items;
 }

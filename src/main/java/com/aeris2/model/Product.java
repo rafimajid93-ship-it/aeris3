@@ -35,7 +35,19 @@
 //    @Column(nullable = false)
 //    private BigDecimal price;
 //
+//    /**
+//     * Backward compatibility / cover image
+//     */
 //    private String imageUrl;
+//
+//    /**
+//     * Multiple product images
+//     */
+//    @ElementCollection(fetch = FetchType.EAGER)
+//    @CollectionTable(name = "product_images", joinColumns = @JoinColumn(name = "product_id"))
+//    @Column(name = "image_url", length = 2000)
+//    @OrderColumn(name = "sort_order")
+//    private List<String> imageUrls = new ArrayList<>();
 //
 //    /** Aggregated stock from variants (for non-preorder products). */
 //    private int stock;
@@ -73,6 +85,7 @@
 //    @JsonIgnoreProperties("product")
 //    private List<ProductVariant> variants = new ArrayList<>();
 //}
+
 package com.aeris2.model;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
@@ -128,6 +141,9 @@ public class Product {
     private int stock;
 
     private LocalDate releaseDate;
+
+    @Column(nullable = false)
+    private boolean active = true;
 
     @CreationTimestamp
     @Column(updatable = false)

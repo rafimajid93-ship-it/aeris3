@@ -1,5 +1,7 @@
+//
 //package com.aeris2.controller;
-////
+//
+//import com.aeris2.dto.OrderItemResponse;
 //import com.aeris2.dto.OrderResponse;
 //import com.aeris2.model.Order;
 //import com.aeris2.model.enums.OrderStatus;
@@ -23,7 +25,6 @@
 //        this.orderRepo = orderRepo;
 //    }
 //
-//    // ✅ List all orders
 //    @GetMapping
 //    @Transactional(readOnly = true)
 //    public ResponseEntity<List<OrderResponse>> getAllOrders() {
@@ -33,7 +34,6 @@
 //        );
 //    }
 //
-//    // ✅ Get one order
 //    @GetMapping("/{id}")
 //    @Transactional(readOnly = true)
 //    public ResponseEntity<OrderResponse> getOrder(@PathVariable Long id) {
@@ -42,7 +42,6 @@
 //                .orElse(ResponseEntity.notFound().build());
 //    }
 //
-//    // ✅ FIXED: Update order status (accepts { "status": "PROCESSING" })
 //    @PatchMapping("/{id}/status")
 //    @Transactional
 //    public ResponseEntity<OrderResponse> updateStatus(
@@ -67,7 +66,6 @@
 //        }
 //    }
 //
-//    // ✅ Delete order
 //    @DeleteMapping("/{id}")
 //    @Transactional
 //    public ResponseEntity<Void> deleteOrder(@PathVariable Long id) {
@@ -78,46 +76,13 @@
 //        return ResponseEntity.noContent().build();
 //    }
 //
-//    // ✅ Reuse same DTO mapping logic
-////    private OrderResponse toResponse(Order order) {
-////        OrderResponse res = new OrderResponse();
-////        res.setId(order.getId());
-////        res.setUserName(order.getUser().getName());
-////        res.setUserPhone(order.getPhoneNumber());
-////        res.setTotalAmount(order.getTotalAmount());
-////        res.setShippingAddress(order.getShippingAddress());
-////        res.setStatus(order.getStatus());
-////        res.setCreatedAt(order.getCreatedAt());
-////
-////        if (order.getPayment() != null) {
-////            res.setPaymentMethod(order.getPayment().getMethod());
-////            res.setPaymentStatus(order.getPayment().getStatus());
-////        }
-////
-////        res.setItems(order.getItems().stream().map(i -> {
-////            var dto = new com.aeris2.dto.OrderItemResponse();
-////            dto.setProductId(i.getProduct().getId());
-////            dto.setProductName(i.getProduct().getName());
-////            dto.setPrice(i.getPrice());
-////            dto.setQuantity(i.getQuantity());
-////            dto.setColor(i.getColor());
-////            dto.setSize(i.getSize());
-////            dto.setPreorder(i.getProduct().isPreorder());
-////            return dto;
-////        }).collect(Collectors.toList()));
-////
-////        return res;
-////    }
 //    private OrderResponse toResponse(Order order) {
 //        OrderResponse res = new OrderResponse();
 //        res.setId(order.getId());
 //        res.setUserName(order.getUser().getName());
 //        res.setUserPhone(order.getPhoneNumber());
-//
-//        // ✅ NEW
 //        res.setName(order.getName());
 //        res.setFacebookId(order.getFacebookId());
-//
 //        res.setTotalAmount(order.getTotalAmount());
 //        res.setShippingAddress(order.getShippingAddress());
 //        res.setStatus(order.getStatus());
@@ -129,7 +94,8 @@
 //        }
 //
 //        res.setItems(order.getItems().stream().map(i -> {
-//            var dto = new com.aeris2.dto.OrderItemResponse();
+//            OrderItemResponse dto = new OrderItemResponse();
+//            dto.setId(i.getId());
 //            dto.setProductId(i.getProduct().getId());
 //            dto.setProductName(i.getProduct().getName());
 //            dto.setPrice(i.getPrice());
@@ -142,8 +108,8 @@
 //
 //        return res;
 //    }
-//
 //}
+
 
 package com.aeris2.controller;
 
@@ -233,6 +199,8 @@ public class AdminOrderController {
         res.setShippingAddress(order.getShippingAddress());
         res.setStatus(order.getStatus());
         res.setCreatedAt(order.getCreatedAt());
+        res.setInvoiceToken(order.getInvoiceToken());
+        res.setInvoiceUrl("/invoice/" + order.getInvoiceToken());
 
         if (order.getPayment() != null) {
             res.setPaymentMethod(order.getPayment().getMethod());

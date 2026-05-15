@@ -11,11 +11,11 @@
 //import com.aeris2.repository.ProductVariantRepository;
 //import org.springframework.data.domain.Page;
 //import org.springframework.data.domain.PageRequest;
+//import org.springframework.data.domain.Sort;
 //import org.springframework.http.ResponseEntity;
 //import org.springframework.transaction.annotation.Transactional;
 //import org.springframework.web.bind.annotation.*;
-//import org.springframework.data.domain.Sort;
-//import org.springframework.data.domain.PageRequest;
+//
 //import java.util.*;
 //import java.util.stream.Collectors;
 //
@@ -36,9 +36,6 @@
 //        this.productVariantRepo = productVariantRepo;
 //    }
 //
-//    // -----------------------------------------------------
-//    // Helpers
-//    // -----------------------------------------------------
 //    private String normalizeValue(String raw) {
 //        if (raw == null) return "Default";
 //        String v = raw.trim();
@@ -63,19 +60,27 @@
 //        return out;
 //    }
 //
-//    // -----------------------------------------------------
-//    // ✅ List all products (paged)
-//    // -----------------------------------------------------
-////    @GetMapping
-////    @Transactional(readOnly = true)
-////    public ResponseEntity<Page<ProductResponse>> getAll(
-////            @RequestParam(defaultValue = "0") int page,
-////            @RequestParam(defaultValue = "50") int size
-////    ) {
-////        var res = productRepo.findAllWithCategory(PageRequest.of(page, size))
-////                .map(this::toListDto);
-////        return ResponseEntity.ok(res);
-////    }
+//    private List<String> normalizeImageUrls(List<String> input, String fallbackSingleImage) {
+//        LinkedHashSet<String> out = new LinkedHashSet<>();
+//
+//        if (input != null) {
+//            for (String url : input) {
+//                if (url == null) continue;
+//                String cleaned = url.trim();
+//                if (!cleaned.isEmpty()) out.add(cleaned);
+//            }
+//        }
+//
+//        if (out.isEmpty() && fallbackSingleImage != null && !fallbackSingleImage.trim().isEmpty()) {
+//            out.add(fallbackSingleImage.trim());
+//        }
+//
+//        return new ArrayList<>(out);
+//    }
+//
+//    private String firstImageOrNull(List<String> imageUrls) {
+//        return (imageUrls != null && !imageUrls.isEmpty()) ? imageUrls.get(0) : null;
+//    }
 //
 //    @GetMapping
 //    @Transactional(readOnly = true)
@@ -86,8 +91,6 @@
 //            @RequestParam(required = false, name = "q") String q
 //    ) {
 //        page = Math.max(page, 0);
-//
-//        // ✅ optional safety cap (adjust if you want)
 //        int MAX_SIZE = 200;
 //        size = Math.max(1, Math.min(size, MAX_SIZE));
 //
@@ -99,9 +102,6 @@
 //        return ResponseEntity.ok(res);
 //    }
 //
-//    // -----------------------------------------------------
-//    // ✅ List normal (non-preorder) products
-//    // -----------------------------------------------------
 //    @GetMapping("/normal")
 //    @Transactional(readOnly = true)
 //    public ResponseEntity<List<ProductResponse>> getNormalProducts() {
@@ -113,9 +113,6 @@
 //        return ResponseEntity.ok(list);
 //    }
 //
-//    // -----------------------------------------------------
-//    // ✅ List preorder products
-//    // -----------------------------------------------------
 //    @GetMapping("/preorders")
 //    @Transactional(readOnly = true)
 //    public ResponseEntity<List<ProductResponse>> getPreorderProducts() {
@@ -127,64 +124,65 @@
 //        return ResponseEntity.ok(list);
 //    }
 //
-//    // -----------------------------------------------------
-//    // ✅ Create product (normal + preorder)
-//    // -----------------------------------------------------
 //    @PostMapping
 //    @Transactional
-//    public ResponseEntity<Product> create(@RequestBody Product p) {
+//    public ResponseEntity<Product> create(@RequestBody ProductRequest req) {
+//        Product p = new Product();
 //
-//        // Category
-//        if (p.getCategory() != null && p.getCategory().getId() != null) {
-//            categoryRepo.findById(p.getCategory().getId()).ifPresent(p::setCategory);
+//        p.setName(req.getName());
+//        p.setDescription(req.getDescription());
+//        p.setPrice(req.getPrice());
+//        p.setPreorder(Boolean.TRUE.equals(req.getPreorder()));
+//        p.setReleaseDate(Boolean.TRUE.equals(req.getPreorder()) ? req.getReleaseDate() : null);
+//
+//        p.setColors(normalizeSet(req.getColors()));
+//        p.setSizes(normalizeSet(req.getSizes()));
+//
+//        List<String> normalizedImages = normalizeImageUrls(req.getImageUrls(), req.getImageUrl());
+//        p.setImageUrls(normalizedImages);
+//        p.setImageUrl(firstImageOrNull(normalizedImages));
+//
+//        if (req.getCategoryId() != null) {
+//            categoryRepo.findById(req.getCategoryId()).ifPresent(p::setCategory);
 //        }
-//
-//        // Normalize colors / sizes (used both for filters and preorder variants)
-//        p.setColors(normalizeSet(p.getColors()));
-//        p.setSizes(normalizeSet(p.getSizes()));
 //
 //        boolean isPreorder = p.isPreorder();
 //
-//        // Base stock:
-//        // - PREORDER: stock = total demand, start from 0, orders will increase.
-//        // - NORMAL: keep whatever comes from UI; if variants exist we will recalc below.
 //        if (isPreorder) {
 //            p.setStock(0);
+//        } else {
+//            p.setStock(req.getStock() != null ? Math.max(0, req.getStock()) : 0);
 //        }
 //
-//        // Grab variants from request (used only for NORMAL products)
-//        List<ProductVariant> requestVariants =
-//                p.getVariants() != null ? new ArrayList<>(p.getVariants()) : new ArrayList<>();
+//        List<ProductVariantRequest> requestVariants =
+//                req.getVariants() != null ? new ArrayList<>(req.getVariants()) : new ArrayList<>();
 //
-//        // Clear variants before saving; we'll attach them after we have product id
 //        p.setVariants(new ArrayList<>());
 //
-//        // Save base product
 //        Product saved = productRepo.save(p);
 //
-//        // ---------- NORMAL PRODUCT: variants from request ----------
 //        if (!isPreorder && !requestVariants.isEmpty()) {
+//            List<ProductVariant> variantsToSave = new ArrayList<>();
 //
-//            for (ProductVariant v : requestVariants) {
-//                String color = normalizeValue(v.getColor());
-//                String size = normalizeValue(v.getSize());
-//                v.setColor(color);
-//                v.setSize(size);
+//            for (ProductVariantRequest vReq : requestVariants) {
+//                ProductVariant v = new ProductVariant();
 //                v.setProduct(saved);
-//                // stock is primitive int; if admin left blank it will be 0.
+//                v.setColor(normalizeValue(vReq.getColor()));
+//                v.setSize(normalizeValue(vReq.getSize()));
+//                v.setStock(Math.max(0, vReq.getStock()));
+//                variantsToSave.add(v);
 //            }
 //
-//            productVariantRepo.saveAll(requestVariants);
-//            saved.setVariants(requestVariants);
+//            productVariantRepo.saveAll(variantsToSave);
+//            saved.setVariants(variantsToSave);
 //
-//            int totalStock = requestVariants.stream()
+//            int totalStock = variantsToSave.stream()
 //                    .mapToInt(ProductVariant::getStock)
 //                    .sum();
-//            saved.setStock(totalStock);           // overwrite with sum of variants
-//            productRepo.save(saved);
+//            saved.setStock(totalStock);
+//            saved = productRepo.save(saved);
 //        }
 //
-//        // ---------- PREORDER PRODUCT: generate variants from colors/sizes ----------
 //        if (isPreorder) {
 //            Set<String> colors = saved.getColors();
 //            Set<String> sizes = saved.getSizes();
@@ -201,35 +199,37 @@
 //                        v.setProduct(saved);
 //                        v.setColor(normalizeValue(c));
 //                        v.setSize(normalizeValue(s));
-//                        v.setStock(0);   // demand starts at zero
+//                        v.setStock(0);
 //                        preorderVariants.add(v);
 //                    }
 //                }
 //                productVariantRepo.saveAll(preorderVariants);
 //                saved.setVariants(preorderVariants);
 //            }
-//
-//            // saved.stock stays 0; OrderController will increase it on each preorder.
 //        }
 //
 //        return ResponseEntity.ok(saved);
 //    }
 //
-//    // -----------------------------------------------------
-//// ✅ Update product (no unique-key errors, no orphan bug)
-//// -----------------------------------------------------
 //    @PutMapping("/{id}")
 //    @Transactional
 //    public ResponseEntity<Product> update(@PathVariable Long id, @RequestBody ProductRequest p) {
 //        return productRepo.findById(id).map(existing -> {
 //
-//            // ---------- Basic fields ----------
 //            if (p.getName() != null) existing.setName(p.getName());
 //            if (p.getDescription() != null) existing.setDescription(p.getDescription());
 //            if (p.getPrice() != null) existing.setPrice(p.getPrice());
-//            if (p.getImageUrl() != null) existing.setImageUrl(p.getImageUrl());
 //
-//            // ---------- Colors & Sizes ----------
+//            if (p.getImageUrls() != null) {
+//                List<String> normalizedImages = normalizeImageUrls(p.getImageUrls(), p.getImageUrl());
+//                existing.setImageUrls(normalizedImages);
+//                existing.setImageUrl(firstImageOrNull(normalizedImages));
+//            } else if (p.getImageUrl() != null) {
+//                List<String> normalizedImages = normalizeImageUrls(existing.getImageUrls(), p.getImageUrl());
+//                existing.setImageUrls(normalizedImages);
+//                existing.setImageUrl(firstImageOrNull(normalizedImages));
+//            }
+//
 //            if (p.getColors() != null) {
 //                existing.setColors(normalizeSet(p.getColors()));
 //            } else if (existing.getColors() == null || existing.getColors().isEmpty()) {
@@ -242,28 +242,23 @@
 //                existing.setSizes(Set.of("Default"));
 //            }
 //
-//            // ---------- Category ----------
 //            if (p.getCategoryId() != null) {
 //                categoryRepo.findById(p.getCategoryId()).ifPresent(existing::setCategory);
 //            }
 //
-//            // ---------- PREORDER / NORMAL SWITCH ----------
 //            if (p.getPreorder() != null) {
-//
 //                if (Boolean.TRUE.equals(p.getPreorder())) {
-//                    // ===== PREORDER PRODUCT =====
 //                    existing.setPreorder(true);
 //                    existing.setReleaseDate(p.getReleaseDate());
 //
-//                    // Keep existing demand; only ensure variant matrix exists if real options
 //                    Set<String> colors = existing.getColors();
-//                    Set<String> sizes  = existing.getSizes();
+//                    Set<String> sizes = existing.getSizes();
 //                    boolean hasNonDefault =
 //                            colors.stream().anyMatch(c -> !c.equalsIgnoreCase("Default")) ||
 //                                    sizes.stream().anyMatch(s -> !s.equalsIgnoreCase("Default"));
 //
 //                    if (hasNonDefault) {
-//                        List<ProductVariant> current = existing.getVariants(); // managed list
+//                        List<ProductVariant> current = existing.getVariants();
 //                        if (current.isEmpty()) {
 //                            for (String c : colors) {
 //                                for (String s : sizes) {
@@ -271,23 +266,19 @@
 //                                    v.setProduct(existing);
 //                                    v.setColor(normalizeValue(c));
 //                                    v.setSize(normalizeValue(s));
-//                                    v.setStock(0); // demand starts ⟂
+//                                    v.setStock(0);
 //                                    current.add(v);
 //                                }
 //                            }
 //                        }
 //                    }
-//                    // existing.stock already equals total demand → do not touch.
 //
 //                } else {
-//                    // ===== NORMAL PRODUCT =====
 //                    existing.setPreorder(false);
 //                    existing.setReleaseDate(null);
 //
-//                    // Work only with the managed collection (orphanRemoval=true)
-//                    List<ProductVariant> current = existing.getVariants(); // same instance Hibernate tracks
+//                    List<ProductVariant> current = existing.getVariants();
 //
-//                    // Index existing variants by normalized (color|size)
 //                    Map<String, ProductVariant> existingByKey = new LinkedHashMap<>();
 //                    for (ProductVariant v : current) {
 //                        String key = normalizeValue(v.getColor()) + "|" + normalizeValue(v.getSize());
@@ -298,28 +289,25 @@
 //                    int totalStock = 0;
 //
 //                    if (p.getVariants() != null && !p.getVariants().isEmpty()) {
-//
-//                        // Aggregate payload by (color,size) so we never insert duplicates
 //                        Map<String, Integer> aggregated = new LinkedHashMap<>();
 //
 //                        for (ProductVariantRequest vReq : p.getVariants()) {
 //                            String color = normalizeValue(vReq.getColor());
-//                            String size  = normalizeValue(vReq.getSize());
-//                            int stock    = Math.max(0, vReq.getStock());
+//                            String size = normalizeValue(vReq.getSize());
+//                            int stock = Math.max(0, vReq.getStock());
 //
 //                            String key = color + "|" + size;
 //                            aggregated.merge(key, stock, Integer::sum);
 //                        }
 //
-//                        // Update or create variants from aggregated input
 //                        for (Map.Entry<String, Integer> entry : aggregated.entrySet()) {
 //                            String key = entry.getKey();
 //                            String[] parts = key.split("\\|", 2);
 //                            String color = parts[0];
-//                            String size  = parts[1];
-//                            int stock    = entry.getValue();
+//                            String size = parts[1];
+//                            int stock = entry.getValue();
 //
-//                            ProductVariant v = existingByKey.get(key); // null = new
+//                            ProductVariant v = existingByKey.get(key);
 //                            if (v == null) {
 //                                v = new ProductVariant();
 //                                v.setProduct(existing);
@@ -332,23 +320,18 @@
 //                        }
 //                    }
 //
-//                    // Mutate the managed collection in place (orphanRemoval will delete old ones)
 //                    current.clear();
 //                    current.addAll(newList);
 //                    existing.setStock(totalStock);
 //                }
 //            }
 //
-//            Product saved = productRepo.save(existing); // cascades variants
+//            Product saved = productRepo.save(existing);
 //            return ResponseEntity.ok(saved);
 //
 //        }).orElse(ResponseEntity.notFound().build());
 //    }
 //
-//
-//    // -----------------------------------------------------
-//    // ✅ Delete product
-//    // -----------------------------------------------------
 //    @DeleteMapping("/{id}")
 //    @Transactional
 //    public ResponseEntity<Void> delete(@PathVariable Long id) {
@@ -358,9 +341,6 @@
 //        return ResponseEntity.noContent().build();
 //    }
 //
-//    // -----------------------------------------------------
-//    // ✅ Get single product (with category, variants, colors, sizes)
-//    // -----------------------------------------------------
 //    @GetMapping("/{id}")
 //    @Transactional(readOnly = true)
 //    public ResponseEntity<ProductResponse> getByIdAdmin(@PathVariable Long id) {
@@ -369,9 +349,6 @@
 //                .orElse(ResponseEntity.notFound().build());
 //    }
 //
-//    // -----------------------------------------------------
-//    // 🧩 DTO mapper
-//    // -----------------------------------------------------
 //    private ProductResponse toListDto(Product p) {
 //        ProductResponse dto = new ProductResponse();
 //        dto.setId(p.getId());
@@ -379,13 +356,16 @@
 //        dto.setDescription(p.getDescription());
 //        dto.setPrice(p.getPrice());
 //        dto.setStock(p.getStock());
-//        dto.setImageUrl(p.getImageUrl());
+//
+//        List<String> imageUrls = p.getImageUrls() == null ? List.of() : new ArrayList<>(p.getImageUrls());
+//        dto.setImageUrls(imageUrls);
+//        dto.setImageUrl(!imageUrls.isEmpty() ? imageUrls.get(0) : p.getImageUrl());
+//
 //        dto.setPreorder(p.isPreorder());
 //        dto.setReleaseDate(p.getReleaseDate());
 //        dto.setCreatedAt(p.getCreatedAt());
 //        dto.setUpdatedAt(p.getUpdatedAt());
 //
-//        // Colors / Sizes for frontend
 //        dto.setColors(
 //                p.getColors() != null && !p.getColors().isEmpty()
 //                        ? p.getColors()
@@ -397,7 +377,6 @@
 //                        : Set.of("Default")
 //        );
 //
-//        // Variants (normalize values on the way out)
 //        if (p.getVariants() != null && !p.getVariants().isEmpty()) {
 //            List<ProductVariantResponse> varRes = p.getVariants().stream().map(v -> {
 //                ProductVariantResponse vr = new ProductVariantResponse();
@@ -421,6 +400,8 @@
 //        return dto;
 //    }
 //}
+
+
 package com.aeris2.controller;
 
 import com.aeris2.dto.ProductRequest;
@@ -461,25 +442,37 @@ public class AdminProductController {
 
     private String normalizeValue(String raw) {
         if (raw == null) return "Default";
+
         String v = raw.trim();
+
         if (v.isEmpty()) return "Default";
+
         if (v.equalsIgnoreCase("default") || v.equalsIgnoreCase("free")) {
             return "Default";
         }
+
         return v;
     }
 
     private Set<String> normalizeSet(Collection<String> input) {
         if (input == null) return Set.of("Default");
+
         Set<String> out = new LinkedHashSet<>();
+
         for (String v : input) {
             if (v == null) continue;
+
             String n = normalizeValue(v);
-            if (!n.isEmpty()) out.add(n);
+
+            if (!n.isEmpty()) {
+                out.add(n);
+            }
         }
+
         if (out.isEmpty()) {
             out.add("Default");
         }
+
         return out;
     }
 
@@ -489,8 +482,12 @@ public class AdminProductController {
         if (input != null) {
             for (String url : input) {
                 if (url == null) continue;
+
                 String cleaned = url.trim();
-                if (!cleaned.isEmpty()) out.add(cleaned);
+
+                if (!cleaned.isEmpty()) {
+                    out.add(cleaned);
+                }
             }
         }
 
@@ -502,7 +499,7 @@ public class AdminProductController {
     }
 
     private String firstImageOrNull(List<String> imageUrls) {
-        return (imageUrls != null && !imageUrls.isEmpty()) ? imageUrls.get(0) : null;
+        return imageUrls != null && !imageUrls.isEmpty() ? imageUrls.get(0) : null;
     }
 
     @GetMapping
@@ -514,6 +511,7 @@ public class AdminProductController {
             @RequestParam(required = false, name = "q") String q
     ) {
         page = Math.max(page, 0);
+
         int MAX_SIZE = 200;
         size = Math.max(1, Math.min(size, MAX_SIZE));
 
@@ -530,9 +528,10 @@ public class AdminProductController {
     public ResponseEntity<List<ProductResponse>> getNormalProducts() {
         var list = productRepo.findAllWithCategory(PageRequest.of(0, 1000))
                 .stream()
-                .filter(p -> !p.isPreorder())
+                .filter(p -> p.isActive() && !p.isPreorder())
                 .map(this::toListDto)
                 .toList();
+
         return ResponseEntity.ok(list);
     }
 
@@ -541,9 +540,10 @@ public class AdminProductController {
     public ResponseEntity<List<ProductResponse>> getPreorderProducts() {
         var list = productRepo.findAllWithCategory(PageRequest.of(0, 1000))
                 .stream()
-                .filter(Product::isPreorder)
+                .filter(p -> p.isActive() && p.isPreorder())
                 .map(this::toListDto)
                 .toList();
+
         return ResponseEntity.ok(list);
     }
 
@@ -557,6 +557,7 @@ public class AdminProductController {
         p.setPrice(req.getPrice());
         p.setPreorder(Boolean.TRUE.equals(req.getPreorder()));
         p.setReleaseDate(Boolean.TRUE.equals(req.getPreorder()) ? req.getReleaseDate() : null);
+        p.setActive(true);
 
         p.setColors(normalizeSet(req.getColors()));
         p.setSizes(normalizeSet(req.getSizes()));
@@ -602,6 +603,7 @@ public class AdminProductController {
             int totalStock = variantsToSave.stream()
                     .mapToInt(ProductVariant::getStock)
                     .sum();
+
             saved.setStock(totalStock);
             saved = productRepo.save(saved);
         }
@@ -616,6 +618,7 @@ public class AdminProductController {
 
             if (hasNonDefault) {
                 List<ProductVariant> preorderVariants = new ArrayList<>();
+
                 for (String c : colors) {
                     for (String s : sizes) {
                         ProductVariant v = new ProductVariant();
@@ -626,6 +629,7 @@ public class AdminProductController {
                         preorderVariants.add(v);
                     }
                 }
+
                 productVariantRepo.saveAll(preorderVariants);
                 saved.setVariants(preorderVariants);
             }
@@ -639,9 +643,19 @@ public class AdminProductController {
     public ResponseEntity<Product> update(@PathVariable Long id, @RequestBody ProductRequest p) {
         return productRepo.findById(id).map(existing -> {
 
-            if (p.getName() != null) existing.setName(p.getName());
-            if (p.getDescription() != null) existing.setDescription(p.getDescription());
-            if (p.getPrice() != null) existing.setPrice(p.getPrice());
+            existing.setActive(true);
+
+            if (p.getName() != null) {
+                existing.setName(p.getName());
+            }
+
+            if (p.getDescription() != null) {
+                existing.setDescription(p.getDescription());
+            }
+
+            if (p.getPrice() != null) {
+                existing.setPrice(p.getPrice());
+            }
 
             if (p.getImageUrls() != null) {
                 List<String> normalizedImages = normalizeImageUrls(p.getImageUrls(), p.getImageUrl());
@@ -676,12 +690,14 @@ public class AdminProductController {
 
                     Set<String> colors = existing.getColors();
                     Set<String> sizes = existing.getSizes();
+
                     boolean hasNonDefault =
                             colors.stream().anyMatch(c -> !c.equalsIgnoreCase("Default")) ||
                                     sizes.stream().anyMatch(s -> !s.equalsIgnoreCase("Default"));
 
                     if (hasNonDefault) {
                         List<ProductVariant> current = existing.getVariants();
+
                         if (current.isEmpty()) {
                             for (String c : colors) {
                                 for (String s : sizes) {
@@ -703,6 +719,7 @@ public class AdminProductController {
                     List<ProductVariant> current = existing.getVariants();
 
                     Map<String, ProductVariant> existingByKey = new LinkedHashMap<>();
+
                     for (ProductVariant v : current) {
                         String key = normalizeValue(v.getColor()) + "|" + normalizeValue(v.getSize());
                         existingByKey.put(key, v);
@@ -731,12 +748,14 @@ public class AdminProductController {
                             int stock = entry.getValue();
 
                             ProductVariant v = existingByKey.get(key);
+
                             if (v == null) {
                                 v = new ProductVariant();
                                 v.setProduct(existing);
                                 v.setColor(color);
                                 v.setSize(size);
                             }
+
                             v.setStock(stock);
                             newList.add(v);
                             totalStock += stock;
@@ -750,6 +769,7 @@ public class AdminProductController {
             }
 
             Product saved = productRepo.save(existing);
+
             return ResponseEntity.ok(saved);
 
         }).orElse(ResponseEntity.notFound().build());
@@ -758,10 +778,25 @@ public class AdminProductController {
     @DeleteMapping("/{id}")
     @Transactional
     public ResponseEntity<Void> delete(@PathVariable Long id) {
-        if (!productRepo.existsById(id)) return ResponseEntity.notFound().build();
-        productVariantRepo.deleteByProductId(id);
-        productRepo.deleteById(id);
-        return ResponseEntity.noContent().build();
+        return productRepo.findById(id)
+                .map(product -> {
+                    product.setActive(false);
+                    productRepo.save(product);
+                    return ResponseEntity.noContent().<Void>build();
+                })
+                .orElse(ResponseEntity.notFound().build());
+    }
+
+    @PatchMapping("/{id}/restore")
+    @Transactional
+    public ResponseEntity<ProductResponse> restore(@PathVariable Long id) {
+        return productRepo.findById(id)
+                .map(product -> {
+                    product.setActive(true);
+                    Product saved = productRepo.save(product);
+                    return ResponseEntity.ok(toListDto(saved));
+                })
+                .orElse(ResponseEntity.notFound().build());
     }
 
     @GetMapping("/{id}")
@@ -774,18 +809,24 @@ public class AdminProductController {
 
     private ProductResponse toListDto(Product p) {
         ProductResponse dto = new ProductResponse();
+
         dto.setId(p.getId());
         dto.setName(p.getName());
         dto.setDescription(p.getDescription());
         dto.setPrice(p.getPrice());
         dto.setStock(p.getStock());
 
-        List<String> imageUrls = p.getImageUrls() == null ? List.of() : new ArrayList<>(p.getImageUrls());
+        List<String> imageUrls = p.getImageUrls() == null
+                ? List.of()
+                : new ArrayList<>(p.getImageUrls());
+
         dto.setImageUrls(imageUrls);
         dto.setImageUrl(!imageUrls.isEmpty() ? imageUrls.get(0) : p.getImageUrl());
 
         dto.setPreorder(p.isPreorder());
         dto.setReleaseDate(p.getReleaseDate());
+        dto.setActive(p.isActive());
+
         dto.setCreatedAt(p.getCreatedAt());
         dto.setUpdatedAt(p.getUpdatedAt());
 
@@ -794,6 +835,7 @@ public class AdminProductController {
                         ? p.getColors()
                         : Set.of("Default")
         );
+
         dto.setSizes(
                 p.getSizes() != null && !p.getSizes().isEmpty()
                         ? p.getSizes()
@@ -808,6 +850,7 @@ public class AdminProductController {
                 vr.setStock(v.getStock());
                 return vr;
             }).collect(Collectors.toList());
+
             dto.setVariants(varRes);
         } else {
             dto.setVariants(List.of());

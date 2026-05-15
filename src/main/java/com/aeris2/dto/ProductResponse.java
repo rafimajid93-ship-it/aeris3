@@ -1,3 +1,4 @@
+//
 //package com.aeris2.dto;
 //
 //import lombok.Data;
@@ -19,7 +20,16 @@
 //    private BigDecimal price;
 //    private int stock;
 //
+//    /**
+//     * Backward compatibility:
+//     * first/cover image
+//     */
 //    private String imageUrl;
+//
+//    /**
+//     * New: multiple images for frontend gallery / slider
+//     */
+//    private List<String> imageUrls;
 //
 //    private boolean preorder;
 //    private LocalDate releaseDate;
@@ -72,6 +82,9 @@ public class ProductResponse {
 
     private boolean preorder;
     private LocalDate releaseDate;
+
+    // Soft delete status
+    private boolean active;
 
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
